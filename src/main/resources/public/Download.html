@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SpringBoot Notification Test</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css"
+          integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+</head>
+<body>
+
+<div class="pricing-header px-3 py-3 pt-md-5 pb-md-4 mx-auto text-center">
+    <h1 class="display-4">Test SpringBoot Notification</h1>
+    <p class="lead">演示SSE,WebSocket及WebSocket STOMP这几种不同的推送方式</p>
+</div>
+
+<div id="app" class="container">
+    <div class="card-deck mb-3 text-center">
+        <!--测试SSE-->
+        <div id="case-sse" class="card mb-4 box-shadow">
+            <div class="card-header">
+                <h4 class="my-0 font-weight-normal">SSE</h4>
+            </div>
+            <div class="card-body">
+                <div v-if="sseSuccessAlertVisibility" class="alert alert-success" role="alert">
+                    已开始下载,请稍后...
+                </div>
+
+                <div class="input-group mt-3">
+                    <textarea v-model="sseMsg" class="form-control" disabled rows="10"></textarea>
+                </div>
+
+                <button type="button" class="mt-3 btn btn-lg btn-block btn-outline-primary"
+                        @click="executeDownload('sse')">
+                    Download
+                </button>
+            </div>
+        </div>
+        <!--测试Websocket-->
+        <div id="case-websocket" class="card mb-4 box-shadow">
+            <div class="card-header">
+                <h4 class="my-0 font-weight-normal">WebSocket</h4>
+            </div>
+            <div class="card-body">
+                <div v-if="wsSuccessAlertVisibility" class="alert alert-success" role="alert">
+                    已开始下载,请稍后...
+                </div>
+                <div class="input-group mt-3">
+                    <textarea v-model="wsMsg" class="form-control" disabled rows="10"></textarea>
+                </div>
+
+                <button type="button" class="mt-3 btn btn-lg btn-block btn-outline-primary"
+                        @click="executeDownload('ws')">
+                    Download
+                </button>
+            </div>
+        </div>
+        <!--测试Websocket stomp-->
+        <div id="case-websocket-stomp" class="card mb-4 box-shadow">
+            <div class="card-header">
+                <h4 class="my-0 font-weight-normal">WebSocket STOMP</h4>
+            </div>
+            <div class="card-body">
+                <div v-if="stompSuccessAlertVisibility" class="alert alert-success" role="alert">
+                    已开始下载,请稍后...
+                </div>
+                <div class="input-group mt-3">
+                    <textarea v-model="stompMsg" class="form-control" disabled rows="10"></textarea>
+                </div>
+
+                <button type="button" class="mt-3 btn btn-lg btn-block btn-outline-primary"
+                        @click="executeDownload('stomp')">
+                    Download
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+<script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+<script src="https://cdn.bootcss.com/stomp.js/2.3.3/stomp.js"></script>
+<script>
+    new Vue({
+        el: '#app',
+        data: {
+            message: 'Hello Vue!',
+            username: 'leven',
+            sseSuccessAlertVisibility: false,
+            wsSuccessAlertVisibility: false,
+            stompSuccessAlertVisibility: false,
+            sseMsg: '',
+            wsMsg: '',
+            stompMsg: ''
+        },
+        methods: {
+            executeDownload: function (type) {
+                var tt = this;
+                var url = "http://localhost:8080/api/download/" + type;
+
+                axios.get(url)
+                    .then(function (data) {
+                        if (data.status === 200) {
+                            tt.showSuccessAlertVisibility(type);
+                            //注册SSE 消息通知服务
+                            tt.registerNotification(type);
+                        }
+                    }).catch(function (reason) {
+                    console.log(reason)
+                });
+            },
+
+            showSuccessAlertVisibility: function (type) {
+                var tt = this;
+                if (type === 'sse') {
+                    tt.sseSuccessAlertVisibility = true;
+                    setTimeout(function () {
+                        tt.sseSuccessAlertVisibility = false;
+                    }, 3000)
+                } else if (type === 'ws') {
+                    tt.wsSuccessAlertVisibility = true;
+                    setTimeout(function () {
+                        tt.wsSuccessAlertVisibility = false;
+                    }, 3000)
+
+                } else if (type === 'stomp') {
+                    tt.stompSuccessAlertVisibility = true;
+                    setTimeout(function () {
+                        tt.stompSuccessAlertVisibility = false;
+                    }, 3000)
+                }
+            },
+            registerNotification: function (type) {
+                var tt = this;
+                if (type === 'sse') {
+                    this.sseMsg = '';
+                    this.usesSSENotification();
+                } else if (type === 'ws') {
+                    this.wsMsg = '';
+                    this.usesWSNotification();
+                } else if (type === 'stomp') {
+                    this.stompMsg = '';
+                    this.usesStompNotification();
+                }
+            },
+            usesSSENotification: function () {
+                var tt = this;
+                var url = "http://localhost:8080/api/sse-notification";
+                var sseClient = new EventSource(url);
+                sseClient.onopen = function () {
+                    console.log("Connection to server opened.");
+                };
+                sseClient.onmessage = function (msg) {
+                    var jsonStr = msg.data;
+
+                    console.log('message', jsonStr);
+                    var obj = JSON.parse(jsonStr);
+                    var percent = obj.percent;
+                    tt.sseMsg += 'SSE 通知您:已下载完成' + percent + "%\r\n";
+                    if (percent === 100) {
+                        sseClient.close();
+                    }
+
+                };
+                sseClient.onerror = function () {
+                    console.log("EventSource failed.");
+                };
+            },
+            usesWSNotification: function () {
+                var tt = this;
+                var url = "http://localhost:8080/ws-notification";
+                var sock = new SockJS(url);
+                sock.onopen = function () {
+                    console.log('open');
+                    sock.send('test');
+                };
+
+                sock.onmessage = function (msg) {
+                    var jsonStr = msg.data;
+
+                    console.log('message', jsonStr);
+
+                    var obj = JSON.parse(jsonStr);
+                    var percent = obj.percent;
+                    tt.wsMsg += 'WS 通知您:已下载完成' + percent + "%\r\n";
+                    if (percent === 100) {
+                        sock.close();
+                    }
+                };
+
+                sock.onclose = function () {
+                    console.log('ws  close');
+                };
+            },
+            usesStompNotification: function () {
+                var tt = this;
+                var url = "http://localhost:8080/ws-stomp-notification";
+                // 公共topic
+                // var notificationTopic = "/topic/download-notification";
+                // 点对点广播
+                var notificationTopic = "/user/queue/download-notification";
+
+                var socket = new SockJS(url);
+                var stompClient = Stomp.over(socket);
+
+                stompClient.connect({}, function (frame) {
+                    console.log("STOMP connection successful");
+
+                    stompClient.subscribe(notificationTopic, function (msg) {
+                        var jsonStr = msg.body;
+
+                        var obj = JSON.parse(jsonStr);
+                        var percent = obj.percent;
+                        tt.stompMsg += 'STOMP 通知您:已下载完成' + percent + "%\r\n";
+                        if (percent === 100) {
+                            stompClient.disconnect()
+                        }
+
+                    });
+
+                }, function (error) {
+                    console.log("STOMP protocol error " + error)
+                })
+            }
+
+        }
+    })
+</script>
+</body>
+</html>
